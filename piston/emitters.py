@@ -20,18 +20,30 @@ except NameError:
                 return True
         return False
 
-from django.db.models.query import QuerySet
+from django.db.models.query import QuerySet, RawQuerySet
 from django.db.models import Model, permalink
-from django.utils import simplejson
 from django.utils.xmlutils import SimplerXMLGenerator
 from django.utils.encoding import smart_unicode
 from django.core.urlresolvers import reverse, NoReverseMatch
 from django.core.serializers.json import DateTimeAwareJSONEncoder
+from django.conf import settings
 from django.http import HttpResponse
 from django.core import serializers
 
+import django
+if django.VERSION >= (1, 5):
+    # In 1.5 and later, DateTimeAwareJSONEncoder inherits from json.JSONEncoder,
+    # while in 1.4 and earlier it inherits from simplejson.JSONEncoder.  The two
+    # are not compatible due to keyword argument namedtuple_as_object, and we
+    # have to ensure that the 'dumps' function we use is the right one.
+    import json
+else:
+    from django.utils import simplejson as json
+
 from utils import HttpStatusCode, Mimer
 from validate_jsonp import is_valid_jsonp_callback_value
+
+NOT_FOUND = [] # just a marker to attributes not found
 
 try:
     import cStringIO as StringIO
@@ -42,6 +54,14 @@ try:
     import cPickle as pickle
 except ImportError:
     import pickle
+
+
+def public_attrs(obj):
+    ''' Returns all non private/protected attributes/methods from object.
+    Basically it filter the result of `dir`
+    '''
+    return [attr for attr in dir(obj) if not attr.startswith('_')]
+
 
 # Allow people to change the reverser (default `permalink`).
 reverser = permalink
@@ -101,17 +121,7 @@ class Emitter(object):
             """
             ret = None
 
-            # return anything we've already seen as a string only
-            # this prevents infinite recursion in the case of recursive 
-            # relationships
-
-            if thing in self.stack:
-                raise RuntimeError, (u'Circular reference detected while emitting '
-                                     'response')
-
-            self.stack.append(thing)
-
-            if isinstance(thing, QuerySet):
+            if isinstance(thing, (QuerySet, RawQuerySet)):
                 ret = _qs(thing, fields)
             elif isinstance(thing, (tuple, list, set)):
                 ret = _list(thing, fields)
@@ -131,11 +141,9 @@ class Emitter(object):
                 if inspect.ismethod(f) and len(inspect.getargspec(f)[0]) == 1:
                     ret = _any(f())
             elif repr(thing).startswith("<django.db.models.fields.related.RelatedManager"):
-                ret = _any(thing.all())
+                ret = _any(thing.all(), fields)
             else:
                 ret = smart_unicode(thing, strings_only=True)
-
-            self.stack.pop()
 
             return ret
 
@@ -162,23 +170,17 @@ class Emitter(object):
             Models. Will respect the `fields` and/or
             `exclude` on the handler (see `typemapper`.)
             """
-            ret = { }
+            ret = {}
             handler = self.in_typemapper(type(data), self.anonymous)
             get_absolute_uri = False
 
             if handler or fields:
                 v = lambda f: getattr(data, f.attname)
-                # FIXME
-                # Catch 22 here. Either we use the fields from the
-                # typemapped handler to make nested models work but the
-                # declared list_fields will ignored for models, or we
-                # use the list_fields from the base handler and accept that
-                # the nested models won't appear properly
-                # Refs #157
-                if handler:
-                    fields = getattr(handler, 'fields')    
-                
-                if not fields or hasattr(handler, 'fields'):
+
+                if handler and not fields:
+                    fields = getattr(handler, 'fields')
+
+                if not fields and hasattr(handler, 'fields'):
                     """
                     Fields was not specified, try to find teh correct
                     version in the typemapper we were sent.
@@ -193,7 +195,7 @@ class Emitter(object):
                     if not get_fields:
                         get_fields = set([ f.attname.replace("_id", "", 1)
                             for f in data._meta.fields + data._meta.virtual_fields])
-                    
+
                     if hasattr(mapped, 'extra_fields'):
                         get_fields.update(mapped.extra_fields)
 
@@ -236,13 +238,9 @@ class Emitter(object):
                         inst = getattr(data, model, None)
 
                         if inst:
-                            if hasattr(inst, 'all'):
-                                ret[model] = _related(inst, fields)
-                            elif callable(inst):
-                                if len(inspect.getargspec(inst)[0]) == 1:
-                                    ret[model] = _any(inst(), fields)
-                            else:
-                                ret[model] = _model(inst, fields)
+                            if callable(inst):
+                                inst = inst()
+                            ret[model] = _any(inst, fields)
 
                     elif maybe_field in met_fields:
                         # Overriding normal field which has a "resource method"
@@ -251,25 +249,25 @@ class Emitter(object):
                         ret[maybe_field] = _any(met_fields[maybe_field](data))
 
                     else:
-                        maybe = getattr(data, maybe_field, None)
-                        if maybe is not None:
+                        maybe = getattr(data, maybe_field, NOT_FOUND)
+                        if maybe is NOT_FOUND:
+                            handler_f = getattr(handler or self.handler, maybe_field, None)
+
+                            if handler_f:
+                                ret[maybe_field] = _any(handler_f(data))
+                        else:
                             if callable(maybe):
                                 if len(inspect.getargspec(maybe)[0]) <= 1:
                                     ret[maybe_field] = _any(maybe())
                             else:
                                 ret[maybe_field] = _any(maybe)
-                        else:
-                            handler_f = getattr(handler or self.handler, maybe_field, None)
-
-                            if handler_f:
-                                ret[maybe_field] = _any(handler_f(data))
 
             else:
                 for f in data._meta.fields:
                     ret[f.attname] = _any(getattr(data, f.attname))
 
-                fields = dir(data.__class__) + ret.keys()
-                add_ons = [k for k in dir(data) if k not in fields]
+                fields = public_attrs(data.__class__) + ret.keys()
+                add_ons = [k for k in public_attrs(data) if k not in fields]
 
                 for k in add_ons:
                     ret[k] = _any(getattr(data, k))
@@ -315,7 +313,6 @@ class Emitter(object):
             return dict([ (k, _any(v, fields)) for k, v in data.iteritems() ])
 
         # Kickstart the seralizin'.
-        self.stack = [];
         return _any(self.data, self.fields)
 
     def in_typemapper(self, model, anonymous):
@@ -407,7 +404,10 @@ class JSONEmitter(Emitter):
     """
     def render(self, request):
         cb = request.GET.get('callback', None)
-        seria = simplejson.dumps(self.construct(), cls=DateTimeAwareJSONEncoder, ensure_ascii=False, indent=4)
+        indent = None
+        if settings.DEBUG:
+            indent = 4
+        seria = json.dumps(self.construct(), cls=DateTimeAwareJSONEncoder, ensure_ascii=False, indent=indent)
 
         # Callback
         if cb and is_valid_jsonp_callback_value(cb):
@@ -416,7 +416,7 @@ class JSONEmitter(Emitter):
         return seria
 
 Emitter.register('json', JSONEmitter, 'application/json; charset=utf-8')
-Mimer.register(simplejson.loads, ('application/json',))
+Mimer.register(json.loads, ('application/json',))
 
 class YAMLEmitter(Emitter):
     """
