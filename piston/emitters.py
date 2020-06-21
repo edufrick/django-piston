@@ -1,7 +1,28 @@
+from __future__ import absolute_import
 from __future__ import generators
 
-import decimal, re, inspect
 import copy
+import decimal
+import inspect
+import re
+
+import django
+from django.conf import settings
+from django.core import serializers
+from django.core.serializers.json import DateTimeAwareJSONEncoder
+from django.core.urlresolvers import NoReverseMatch
+from django.core.urlresolvers import reverse
+from django.db.models import Model
+from django.db.models import permalink
+from django.db.models.query import QuerySet
+from django.db.models.query import RawQuerySet
+from django.http import HttpResponse
+from django.utils.encoding import smart_unicode
+from django.utils.xmlutils import SimplerXMLGenerator
+
+from utils import HttpStatusCode
+from utils import Mimer
+from validate_jsonp import is_valid_jsonp_callback_value
 
 try:
     # yaml isn't standard with python.  It shouldn't be required if it
@@ -14,23 +35,16 @@ except ImportError:
 try:
     any
 except NameError:
+
     def any(iterable):
         for element in iterable:
             if element:
                 return True
         return False
 
-from django.db.models.query import QuerySet, RawQuerySet
-from django.db.models import Model, permalink
-from django.utils.xmlutils import SimplerXMLGenerator
-from django.utils.encoding import smart_unicode
-from django.core.urlresolvers import reverse, NoReverseMatch
-from django.core.serializers.json import DateTimeAwareJSONEncoder
-from django.conf import settings
-from django.http import HttpResponse
-from django.core import serializers
 
-import django
+
+
 if django.VERSION >= (1, 5):
     # In 1.5 and later, DateTimeAwareJSONEncoder inherits from json.JSONEncoder,
     # while in 1.4 and earlier it inherits from simplejson.JSONEncoder.  The two
@@ -40,10 +54,8 @@ if django.VERSION >= (1, 5):
 else:
     from django.utils import simplejson as json
 
-from utils import HttpStatusCode, Mimer
-from validate_jsonp import is_valid_jsonp_callback_value
 
-NOT_FOUND = [] # just a marker to attributes not found
+NOT_FOUND = []  # just a marker to attributes not found
 
 try:
     import cStringIO as StringIO
@@ -57,14 +69,15 @@ except ImportError:
 
 
 def public_attrs(obj):
-    ''' Returns all non private/protected attributes/methods from object.
+    """ Returns all non private/protected attributes/methods from object.
     Basically it filter the result of `dir`
-    '''
-    return [attr for attr in dir(obj) if not attr.startswith('_')]
+    """
+    return [attr for attr in dir(obj) if not attr.startswith("_")]
 
 
 # Allow people to change the reverser (default `permalink`).
 reverser = permalink
+
 
 class Emitter(object):
     """
@@ -78,10 +91,21 @@ class Emitter(object):
     method detection came, and we accidentially caught these
     as the methods on the handler. Issue58 says that's no good.
     """
-    EMITTERS = { }
-    RESERVED_FIELDS = set([ 'read', 'update', 'create',
-                            'delete', 'model', 'anonymous',
-                            'allowed_methods', 'fields', 'exclude' ])
+
+    EMITTERS = {}
+    RESERVED_FIELDS = set(
+        [
+            "read",
+            "update",
+            "create",
+            "delete",
+            "model",
+            "anonymous",
+            "allowed_methods",
+            "fields",
+            "exclude",
+        ]
+    )
 
     def __init__(self, payload, typemapper, handler, fields=(), anonymous=True):
         self.typemapper = typemapper
@@ -95,7 +119,7 @@ class Emitter(object):
 
     def method_fields(self, handler, fields):
         if not handler:
-            return { }
+            return {}
 
         ret = dict()
 
@@ -115,6 +139,7 @@ class Emitter(object):
 
         Returns `dict`.
         """
+
         def _any(thing, fields=None):
             """
             Dispatch, all types are routed through here.
@@ -136,11 +161,13 @@ class Emitter(object):
             elif inspect.isfunction(thing):
                 if not inspect.getargspec(thing)[0]:
                     ret = _any(thing())
-            elif hasattr(thing, '__emittable__'):
+            elif hasattr(thing, "__emittable__"):
                 f = thing.__emittable__
                 if inspect.ismethod(f) and len(inspect.getargspec(f)[0]) == 1:
                     ret = _any(f())
-            elif repr(thing).startswith("<django.db.models.fields.related.RelatedManager"):
+            elif repr(thing).startswith(
+                "<django.db.models.fields.related.RelatedManager"
+            ):
                 ret = _any(thing.all(), fields)
             else:
                 ret = smart_unicode(thing, strings_only=True)
@@ -157,13 +184,13 @@ class Emitter(object):
             """
             Foreign keys.
             """
-            return [ _model(m, fields) for m in data.iterator() ]
+            return [_model(m, fields) for m in data.iterator()]
 
         def _m2m(data, field, fields=None):
             """
             Many to many (re-route to `_model`.)
             """
-            return [ _model(m, fields) for m in getattr(data, field.name).iterator() ]
+            return [_model(m, fields) for m in getattr(data, field.name).iterator()]
 
         def _model(data, fields=None):
             """
@@ -178,9 +205,9 @@ class Emitter(object):
                 v = lambda f: getattr(data, f.attname)
 
                 if handler and not fields:
-                    fields = getattr(handler, 'fields')
+                    fields = getattr(handler, "fields")
 
-                if not fields and hasattr(handler, 'fields'):
+                if not fields and hasattr(handler, "fields"):
                     """
                     Fields was not specified, try to find teh correct
                     version in the typemapper we were sent.
@@ -189,14 +216,18 @@ class Emitter(object):
                     get_fields = set(mapped.fields)
                     exclude_fields = set(mapped.exclude).difference(get_fields)
 
-                    if 'absolute_uri' in get_fields:
+                    if "absolute_uri" in get_fields:
                         get_absolute_uri = True
 
                     if not get_fields:
-                        get_fields = set([ f.attname.replace("_id", "", 1)
-                            for f in data._meta.fields + data._meta.virtual_fields])
+                        get_fields = set(
+                            [
+                                f.attname.replace("_id", "", 1)
+                                for f in data._meta.fields + data._meta.virtual_fields
+                            ]
+                        )
 
-                    if hasattr(mapped, 'extra_fields'):
+                    if hasattr(mapped, "extra_fields"):
                         get_fields.update(mapped.extra_fields)
 
                     # sets can be negated.
@@ -215,7 +246,9 @@ class Emitter(object):
                 met_fields = self.method_fields(handler, get_fields)
 
                 for f in data._meta.local_fields + data._meta.virtual_fields:
-                    if f.serialize and not any([ p in met_fields for p in [ f.attname, f.name ]]):
+                    if f.serialize and not any(
+                        [p in met_fields for p in [f.attname, f.name]]
+                    ):
                         if not f.rel:
                             if f.attname in get_fields:
                                 ret[f.attname] = _any(v(f))
@@ -251,7 +284,9 @@ class Emitter(object):
                     else:
                         maybe = getattr(data, maybe_field, NOT_FOUND)
                         if maybe is NOT_FOUND:
-                            handler_f = getattr(handler or self.handler, maybe_field, None)
+                            handler_f = getattr(
+                                handler or self.handler, maybe_field, None
+                            )
 
                             if handler_f:
                                 ret[maybe_field] = _any(handler_f(data))
@@ -275,22 +310,26 @@ class Emitter(object):
             # resouce uri
             if self.in_typemapper(type(data), self.anonymous):
                 handler = self.in_typemapper(type(data), self.anonymous)
-                if hasattr(handler, 'resource_uri'):
+                if hasattr(handler, "resource_uri"):
                     url_id, fields = handler.resource_uri(data)
 
                     try:
-                        ret['resource_uri'] = reverser( lambda: (url_id, fields) )()
+                        ret["resource_uri"] = reverser(lambda: (url_id, fields))()
                     except NoReverseMatch, e:
                         pass
 
-            if hasattr(data, 'get_api_url') and 'resource_uri' not in ret:
-                try: ret['resource_uri'] = data.get_api_url()
-                except: pass
+            if hasattr(data, "get_api_url") and "resource_uri" not in ret:
+                try:
+                    ret["resource_uri"] = data.get_api_url()
+                except:
+                    pass
 
             # absolute uri
-            if hasattr(data, 'get_absolute_url') and get_absolute_uri:
-                try: ret['absolute_uri'] = data.get_absolute_url()
-                except: pass
+            if hasattr(data, "get_absolute_url") and get_absolute_uri:
+                try:
+                    ret["absolute_uri"] = data.get_absolute_url()
+                except:
+                    pass
 
             return ret
 
@@ -298,19 +337,19 @@ class Emitter(object):
             """
             Querysets.
             """
-            return [ _any(v, fields) for v in data ]
+            return [_any(v, fields) for v in data]
 
         def _list(data, fields=None):
             """
             Lists.
             """
-            return [ _any(v, fields) for v in data ]
+            return [_any(v, fields) for v in data]
 
         def _dict(data, fields=None):
             """
             Dictionaries.
             """
-            return dict([ (k, _any(v, fields)) for k, v in data.iteritems() ])
+            return dict([(k, _any(v, fields)) for k, v in data.iteritems()])
 
         # Kickstart the seralizin'.
         return _any(self.data, self.fields)
@@ -347,7 +386,7 @@ class Emitter(object):
         raise ValueError("No emitters found for type %s" % format)
 
     @classmethod
-    def register(cls, name, klass, content_type='text/plain'):
+    def register(cls, name, klass, content_type="text/plain"):
         """
         Register an emitter.
 
@@ -365,6 +404,7 @@ class Emitter(object):
         want to provide output in one of the built-in emitters.
         """
         return cls.EMITTERS.pop(name, None)
+
 
 class XMLEmitter(Emitter):
     def _to_xml(self, xml, data):
@@ -395,49 +435,64 @@ class XMLEmitter(Emitter):
 
         return stream.getvalue()
 
-Emitter.register('xml', XMLEmitter, 'text/xml; charset=utf-8')
-Mimer.register(lambda *a: None, ('text/xml',))
+
+Emitter.register("xml", XMLEmitter, "text/xml; charset=utf-8")
+Mimer.register(lambda *a: None, ("text/xml",))
+
 
 class JSONEmitter(Emitter):
     """
     JSON emitter, understands timestamps.
     """
+
     def render(self, request):
-        cb = request.GET.get('callback', None)
+        cb = request.GET.get("callback", None)
         indent = None
         if settings.DEBUG:
             indent = 4
-        seria = json.dumps(self.construct(), cls=DateTimeAwareJSONEncoder, ensure_ascii=False, indent=indent)
+        seria = json.dumps(
+            self.construct(),
+            cls=DateTimeAwareJSONEncoder,
+            ensure_ascii=False,
+            indent=indent,
+        )
 
         # Callback
         if cb and is_valid_jsonp_callback_value(cb):
-            return '%s(%s)' % (cb, seria)
+            return "%s(%s)" % (cb, seria)
 
         return seria
 
-Emitter.register('json', JSONEmitter, 'application/json; charset=utf-8')
-Mimer.register(json.loads, ('application/json',))
+
+Emitter.register("json", JSONEmitter, "application/json; charset=utf-8")
+Mimer.register(json.loads, ("application/json",))
+
 
 class YAMLEmitter(Emitter):
     """
     YAML emitter, uses `safe_dump` to omit the
     specific types when outputting to non-Python.
     """
+
     def render(self, request):
         return yaml.safe_dump(self.construct())
 
+
 if yaml:  # Only register yaml if it was import successfully.
-    Emitter.register('yaml', YAMLEmitter, 'application/x-yaml; charset=utf-8')
-    Mimer.register(lambda s: dict(yaml.safe_load(s)), ('application/x-yaml',))
+    Emitter.register("yaml", YAMLEmitter, "application/x-yaml; charset=utf-8")
+    Mimer.register(lambda s: dict(yaml.safe_load(s)), ("application/x-yaml",))
+
 
 class PickleEmitter(Emitter):
     """
     Emitter that returns Python pickled.
     """
+
     def render(self, request):
         return pickle.dumps(self.construct())
 
-Emitter.register('pickle', PickleEmitter, 'application/python-pickle')
+
+Emitter.register("pickle", PickleEmitter, "application/python-pickle")
 
 """
 WARNING: Accepting arbitrary pickled data is a huge security concern.
@@ -450,11 +505,13 @@ Uncomment the line below to enable it. You're doing so at your own risk.
 """
 # Mimer.register(pickle.loads, ('application/python-pickle',))
 
+
 class DjangoEmitter(Emitter):
     """
     Emitter for the Django serialized format.
     """
-    def render(self, request, format='xml'):
+
+    def render(self, request, format="xml"):
         if isinstance(self.data, HttpResponse):
             return self.data
         elif isinstance(self.data, (int, str)):
@@ -464,4 +521,5 @@ class DjangoEmitter(Emitter):
 
         return response
 
-Emitter.register('django', DjangoEmitter, 'text/xml; charset=utf-8')
+
+Emitter.register("django", DjangoEmitter, "text/xml; charset=utf-8")

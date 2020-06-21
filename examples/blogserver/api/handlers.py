@@ -1,16 +1,27 @@
-from piston.handler import BaseHandler, AnonymousBaseHandler
-from piston.utils import rc, require_mime, require_extended
+from __future__ import absolute_import
 
 from blogserver.blog.models import Blogpost
+from piston.handler import AnonymousBaseHandler
+from piston.handler import BaseHandler
+from piston.utils import rc
+from piston.utils import require_extended
+from piston.utils import require_mime
+
 
 class BlogpostHandler(BaseHandler):
     """
     Authenticated entrypoint for blogposts.
     """
+
     model = Blogpost
-    anonymous = 'AnonymousBlogpostHandler'
-    fields = ('title', 'content', ('author', ('username',)), 
-              'created_on', 'content_length')
+    anonymous = "AnonymousBlogpostHandler"
+    fields = (
+        "title",
+        "content",
+        ("author", ("username",)),
+        "created_on",
+        "content_length",
+    )
 
     @classmethod
     def content_length(cls, blogpost):
@@ -18,7 +29,7 @@ class BlogpostHandler(BaseHandler):
 
     @classmethod
     def resource_uri(cls, blogpost):
-        return ('blogposts', [ 'json', ])
+        return ("blogposts", ["json",])
 
     def read(self, request, title=None):
         """
@@ -29,7 +40,7 @@ class BlogpostHandler(BaseHandler):
          - `title`: The title of the post to retrieve.
         """
         base = Blogpost.objects
-        
+
         if title:
             return base.get(title=title)
         else:
@@ -44,15 +55,17 @@ class BlogpostHandler(BaseHandler):
         if self.exists(**attrs):
             return rc.DUPLICATE_ENTRY
         else:
-            post = Blogpost(title=attrs['title'], 
-                            content=attrs['content'],
-                            author=request.user)
+            post = Blogpost(
+                title=attrs["title"], content=attrs["content"], author=request.user
+            )
             post.save()
-            
+
             return post
+
 
 class AnonymousBlogpostHandler(BlogpostHandler, AnonymousBaseHandler):
     """
     Anonymous entrypoint for blogposts.
     """
-    fields = ('id', 'title', 'content', 'created_on')
+
+    fields = ("id", "title", "content", "created_on")

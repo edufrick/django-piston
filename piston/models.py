@@ -1,34 +1,45 @@
-import urllib, time, urlparse
+from __future__ import absolute_import
 
-# Django imports
-from django.db.models.signals import post_save, post_delete
-from django.db import models
+import time
+import urllib
+import urlparse
+
 from django.contrib.auth.models import User
-from django.core.mail import send_mail, mail_admins
+from django.core.mail import mail_admins
+from django.core.mail import send_mail
+from django.db import models
+# Django imports
+from django.db.models.signals import post_delete
+from django.db.models.signals import post_save
 
 # Piston imports
-from managers import TokenManager, ConsumerManager, ResourceManager
-from signals import consumer_post_save, consumer_post_delete
+from managers import ConsumerManager
+from managers import ResourceManager
+from managers import TokenManager
+from signals import consumer_post_delete
+from signals import consumer_post_save
 
 KEY_SIZE = 18
 SECRET_SIZE = 32
 VERIFIER_SIZE = 10
 
 CONSUMER_STATES = (
-    ('pending', 'Pending'),
-    ('accepted', 'Accepted'),
-    ('canceled', 'Canceled'),
-    ('rejected', 'Rejected')
+    ("pending", "Pending"),
+    ("accepted", "Accepted"),
+    ("canceled", "Canceled"),
+    ("rejected", "Rejected"),
 )
+
 
 def generate_random(length=SECRET_SIZE):
     return User.objects.make_random_password(length=length)
+
 
 class Nonce(models.Model):
     token_key = models.CharField(max_length=KEY_SIZE)
     consumer_key = models.CharField(max_length=KEY_SIZE)
     key = models.CharField(max_length=255)
-    
+
     def __unicode__(self):
         return u"Nonce %s for %s" % (self.key, self.consumer_key)
 
@@ -40,11 +51,11 @@ class Consumer(models.Model):
     key = models.CharField(max_length=KEY_SIZE)
     secret = models.CharField(max_length=SECRET_SIZE)
 
-    status = models.CharField(max_length=16, choices=CONSUMER_STATES, default='pending')
-    user = models.ForeignKey(User, null=True, blank=True, related_name='consumers')
+    status = models.CharField(max_length=16, choices=CONSUMER_STATES, default="pending")
+    user = models.ForeignKey(User, null=True, blank=True, related_name="consumers")
 
     objects = ConsumerManager()
-        
+
     def __unicode__(self):
         return u"Consumer %s with key %s" % (self.name, self.key)
 
@@ -73,38 +84,42 @@ class Consumer(models.Model):
 class Token(models.Model):
     REQUEST = 1
     ACCESS = 2
-    TOKEN_TYPES = ((REQUEST, u'Request'), (ACCESS, u'Access'))
-    
+    TOKEN_TYPES = ((REQUEST, u"Request"), (ACCESS, u"Access"))
+
     key = models.CharField(max_length=KEY_SIZE)
     secret = models.CharField(max_length=SECRET_SIZE)
     verifier = models.CharField(max_length=VERIFIER_SIZE)
     token_type = models.IntegerField(choices=TOKEN_TYPES)
     timestamp = models.IntegerField(default=long(time.time()))
     is_approved = models.BooleanField(default=False)
-    
-    user = models.ForeignKey(User, null=True, blank=True, related_name='tokens')
+
+    user = models.ForeignKey(User, null=True, blank=True, related_name="tokens")
     consumer = models.ForeignKey(Consumer)
-    
+
     callback = models.CharField(max_length=255, null=True, blank=True)
     callback_confirmed = models.BooleanField(default=False)
-    
+
     objects = TokenManager()
-    
+
     def __unicode__(self):
-        return u"%s Token %s for %s" % (self.get_token_type_display(), self.key, self.consumer)
+        return u"%s Token %s for %s" % (
+            self.get_token_type_display(),
+            self.key,
+            self.consumer,
+        )
 
     def to_string(self, only_key=False):
         token_dict = {
-            'oauth_token': self.key, 
-            'oauth_token_secret': self.secret,
-            'oauth_callback_confirmed': 'true',
+            "oauth_token": self.key,
+            "oauth_token_secret": self.secret,
+            "oauth_callback_confirmed": "true",
         }
 
         if self.verifier:
-            token_dict.update({ 'oauth_verifier': self.verifier })
+            token_dict.update({"oauth_verifier": self.verifier})
 
         if only_key:
-            del token_dict['oauth_token_secret']
+            del token_dict["oauth_token_secret"]
 
         return urllib.urlencode(token_dict)
 
@@ -118,7 +133,7 @@ class Token(models.Model):
         self.key = key
         self.secret = secret
         self.save()
-        
+
     # -- OAuth 1.0a stuff
 
     def get_callback_url(self):
@@ -127,15 +142,14 @@ class Token(models.Model):
             parts = urlparse.urlparse(self.callback)
             scheme, netloc, path, params, query, fragment = parts[:6]
             if query:
-                query = '%s&oauth_verifier=%s' % (query, self.verifier)
+                query = "%s&oauth_verifier=%s" % (query, self.verifier)
             else:
-                query = 'oauth_verifier=%s' % self.verifier
-            return urlparse.urlunparse((scheme, netloc, path, params,
-                query, fragment))
+                query = "oauth_verifier=%s" % self.verifier
+            return urlparse.urlunparse((scheme, netloc, path, params, query, fragment))
         return self.callback
-    
+
     def set_callback(self, callback):
-        if callback != "oob": # out of band, says "we can't do this!"
+        if callback != "oob":  # out of band, says "we can't do this!"
             self.callback = callback
             self.callback_confirmed = True
             self.save()

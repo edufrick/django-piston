@@ -1,17 +1,22 @@
+from __future__ import absolute_import
+
 import time
+
 import django
-from django.http import HttpResponse
-from django.core.cache import cache
 from django import get_version as django_version
-from django.core.mail import send_mail, mail_admins
 from django.conf import settings
-from django.utils.translation import ugettext as _
-from django.template import loader, TemplateDoesNotExist
 from django.contrib.sites.models import Site
+from django.core.cache import cache
+from django.core.mail import mail_admins
+from django.core.mail import send_mail
+from django.http import HttpResponse
+from django.template import TemplateDoesNotExist
+from django.template import loader
+from django.utils.translation import ugettext as _
+
 from decorator import decorator
 
-
-__version__ = '0.2.5.8'
+__version__ = "0.2.5.8"
 
 
 def get_version():
@@ -19,25 +24,31 @@ def get_version():
 
 
 def format_error(error):
-    return u"Piston/%s (Django %s) crash report:\n\n%s" % \
-        (get_version(), django_version(), error)
+    return u"Piston/%s (Django %s) crash report:\n\n%s" % (
+        get_version(),
+        django_version(),
+        error,
+    )
 
 
 class rc_factory(object):
     """
     Status codes.
     """
-    CODES = dict(ALL_OK=('OK', 200),
-                 CREATED=('Created', 201),
-                 DELETED=('', 204),  # 204 says "Don't send a body!"
-                 BAD_REQUEST=('Bad Request', 400),
-                 FORBIDDEN=('Forbidden', 401),
-                 NOT_FOUND=('Not Found', 404),
-                 DUPLICATE_ENTRY=('Conflict/Duplicate', 409),
-                 NOT_HERE=('Gone', 410),
-                 INTERNAL_ERROR=('Internal Error', 500),
-                 NOT_IMPLEMENTED=('Not Implemented', 501),
-                 THROTTLED=('Throttled', 503))
+
+    CODES = dict(
+        ALL_OK=("OK", 200),
+        CREATED=("Created", 201),
+        DELETED=("", 204),  # 204 says "Don't send a body!"
+        BAD_REQUEST=("Bad Request", 400),
+        FORBIDDEN=("Forbidden", 401),
+        NOT_FOUND=("Not Found", 404),
+        DUPLICATE_ENTRY=("Conflict/Duplicate", 409),
+        NOT_HERE=("Gone", 410),
+        INTERNAL_ERROR=("Internal Error", 500),
+        NOT_IMPLEMENTED=("Not Implemented", 501),
+        THROTTLED=("Throttled", 503),
+    )
 
     def __getattr__(self, attr):
         """
@@ -51,12 +62,14 @@ class rc_factory(object):
             raise AttributeError(attr)
 
         if django.VERSION < (1, 4):
+
             class HttpResponseWrapper(HttpResponse):
                 """
                 Wrap HttpResponse and make sure that the internal _is_string
                 flag is updated when the _set_content method (via the content
                 property) is called
                 """
+
                 def _set_content(self, content):
                     """
                     Set the _container and _is_string /
@@ -68,7 +81,9 @@ class rc_factory(object):
                     http://code.djangoproject.com/ticket/9403
                     """
                     is_string = False
-                    if not isinstance(content, basestring) and hasattr(content, '__iter__'):
+                    if not isinstance(content, basestring) and hasattr(
+                        content, "__iter__"
+                    ):
                         self._container = content
                     else:
                         self._container = [content]
@@ -78,9 +93,10 @@ class rc_factory(object):
 
                 content = property(HttpResponse._get_content, _set_content)
 
-            return HttpResponseWrapper(r, content_type='text/plain', status=c)
+            return HttpResponseWrapper(r, content_type="text/plain", status=c)
 
-        return HttpResponse(r, content_type='text/plain', status=c)
+        return HttpResponse(r, content_type="text/plain", status=c)
+
 
 rc = rc_factory()
 
@@ -89,23 +105,27 @@ class FormValidationError(Exception):
     def __init__(self, form):
         self.form = form
 
+
 class HttpStatusCode(Exception):
     def __init__(self, response):
         self.response = response
 
-def validate(v_form, operation='POST'):
+
+def validate(v_form, operation="POST"):
     @decorator
     def wrap(f, self, request, *a, **kwa):
         form = v_form(getattr(request, operation))
 
         if form.is_valid():
-            setattr(request, 'form', form)
+            setattr(request, "form", form)
             return f(self, request, *a, **kwa)
         else:
             raise FormValidationError(form)
+
     return wrap
 
-def throttle(max_requests, timeout=60*60, extra=''):
+
+def throttle(max_requests, timeout=60 * 60, extra=""):
     """
     Simple throttling decorator, caches
     the amount of requests made in cache.
@@ -118,21 +138,22 @@ def throttle(max_requests, timeout=60*60, extra=''):
      - `max_requests`: The maximum number of requests
      - `timeout`: The timeout for the cache entry (default: 1 hour)
     """
+
     @decorator
     def wrap(f, self, request, *args, **kwargs):
         if request.user.is_authenticated():
             ident = request.user.username
         else:
-            ident = request.META.get('REMOTE_ADDR', None)
+            ident = request.META.get("REMOTE_ADDR", None)
 
-        if hasattr(request, 'throttle_extra'):
+        if hasattr(request, "throttle_extra"):
             """
             Since we want to be able to throttle on a per-
             application basis, it's important that we realize
             that `throttle_extra` might be set on the request
             object. If so, append the identifier name with it.
             """
-            ident += ':%s' % str(request.throttle_extra)
+            ident += ":%s" % str(request.throttle_extra)
 
         if ident:
             """
@@ -141,7 +162,7 @@ def throttle(max_requests, timeout=60*60, extra=''):
             can't use it yet. If someone sees this after it's in
             stable, you can change it here.
             """
-            ident += ':%s' % extra
+            ident += ":%s" % extra
 
             now = time.time()
             count, expiration = cache.get(ident, (1, None))
@@ -152,14 +173,16 @@ def throttle(max_requests, timeout=60*60, extra=''):
             if count >= max_requests and expiration > now:
                 t = rc.THROTTLED
                 wait = int(expiration - now)
-                t.content = 'Throttled, wait %d seconds.' % wait
-                t['Retry-After'] = wait
+                t.content = "Throttled, wait %d seconds." % wait
+                t["Retry-After"] = wait
                 return t
 
-            cache.set(ident, (count+1, expiration), (expiration - now))
+            cache.set(ident, (count + 1, expiration), (expiration - now))
 
         return f(self, request, *args, **kwargs)
+
     return wrap
+
 
 def coerce_put_post(request):
     """
@@ -182,7 +205,7 @@ def coerce_put_post(request):
         # the first time _load_post_and_files is called (both by wsgi.py and
         # modpython.py). If it's set, the request has to be 'reset' to redo
         # the query value parsing in POST mode.
-        if hasattr(request, '_post'):
+        if hasattr(request, "_post"):
             del request._post
             del request._files
 
@@ -191,9 +214,9 @@ def coerce_put_post(request):
             request._load_post_and_files()
             request.method = "PUT"
         except AttributeError:
-            request.META['REQUEST_METHOD'] = 'POST'
+            request.META["REQUEST_METHOD"] = "POST"
             request._load_post_and_files()
-            request.META['REQUEST_METHOD'] = 'PUT'
+            request.META["REQUEST_METHOD"] = "PUT"
 
         request.PUT = request.POST
 
@@ -202,7 +225,9 @@ class MimerDataException(Exception):
     """
     Raised if the content_type and data don't match
     """
+
     pass
+
 
 class Mimer(object):
     TYPES = dict()
@@ -214,7 +239,7 @@ class Mimer(object):
         content_type = self.content_type()
 
         if content_type is not None:
-            return content_type.lstrip().startswith('multipart')
+            return content_type.lstrip().startswith("multipart")
 
         return False
 
@@ -236,7 +261,7 @@ class Mimer(object):
         type_formencoded = "application/x-www-form-urlencoded"
 
         # Fix for cases where CONTENT_TYPE == 'application/x-www-form-urlencoded; charset=UTF-8'
-        ctype = self.request.META.get('CONTENT_TYPE', type_formencoded).split(';')[0]
+        ctype = self.request.META.get("CONTENT_TYPE", type_formencoded).split(";")[0]
 
         if type_formencoded in ctype:
             return None
@@ -289,8 +314,10 @@ class Mimer(object):
     def unregister(cls, loadee):
         return cls.TYPES.pop(loadee)
 
+
 def translate_mime(request):
     request = Mimer(request).translate()
+
 
 def require_mime(*mimes):
     """
@@ -298,15 +325,18 @@ def require_mime(*mimes):
     helper called `require_extended` below which requires everything
     we support except for post-data via form.
     """
+
     @decorator
     def wrap(f, self, request, *args, **kwargs):
         m = Mimer(request)
         realmimes = set()
 
-        rewrite = { 'json':   'application/json',
-                    'yaml':   'application/x-yaml',
-                    'xml':    'text/xml',
-                    'pickle': 'application/python-pickle' }
+        rewrite = {
+            "json": "application/json",
+            "yaml": "application/x-yaml",
+            "xml": "text/xml",
+            "pickle": "application/python-pickle",
+        }
 
         for idx, mime in enumerate(mimes):
             realmimes.add(rewrite.get(mime, mime))
@@ -315,9 +345,12 @@ def require_mime(*mimes):
             return rc.BAD_REQUEST
 
         return f(self, request, *args, **kwargs)
+
     return wrap
 
-require_extended = require_mime('json', 'yaml', 'xml', 'pickle')
+
+require_extended = require_mime("json", "yaml", "xml", "pickle")
+
 
 def send_consumer_mail(consumer):
     """
@@ -339,8 +372,9 @@ def send_consumer_mail(consumer):
     template = "piston/mails/consumer_%s.txt" % consumer.status
 
     try:
-        body = loader.render_to_string(template,
-            { 'consumer' : consumer, 'user' : consumer.user })
+        body = loader.render_to_string(
+            template, {"consumer": consumer, "user": consumer.user}
+        )
     except TemplateDoesNotExist:
         """
         They haven't set up the templates, which means they might not want
@@ -356,11 +390,10 @@ def send_consumer_mail(consumer):
     if consumer.user:
         send_mail(_(subject), body, sender, [consumer.user.email], fail_silently=True)
 
-    if consumer.status == 'pending' and len(settings.ADMINS):
+    if consumer.status == "pending" and len(settings.ADMINS):
         mail_admins(_(subject), body, fail_silently=True)
 
     if settings.DEBUG and consumer.user:
         print "Mail being sent, to=%s" % consumer.user.email
         print "Subject: %s" % _(subject)
         print body
-

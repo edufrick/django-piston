@@ -1,17 +1,23 @@
+from __future__ import absolute_import
+
 import warnings
 
-from utils import rc
-from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.conf import settings
+from django.core.exceptions import MultipleObjectsReturned
+from django.core.exceptions import ObjectDoesNotExist
 
-typemapper = { }
-handler_tracker = [ ]
+from utils import rc
+
+typemapper = {}
+handler_tracker = []
+
 
 class HandlerMetaClass(type):
     """
     Metaclass that keeps a registry of class -> handler
     mappings.
     """
+
     def __new__(cls, name, bases, attrs):
         new_cls = type.__new__(cls, name, bases, attrs)
 
@@ -20,20 +26,24 @@ class HandlerMetaClass(type):
                 if model == m and anon == a:
                     return k
 
-        if hasattr(new_cls, 'model'):
+        if hasattr(new_cls, "model"):
             if already_registered(new_cls.model, new_cls.is_anonymous):
-                if not getattr(settings, 'PISTON_IGNORE_DUPE_MODELS', False):
-                    warnings.warn("Handler already registered for model %s, "
-                        "you may experience inconsistent results." % new_cls.model.__name__)
+                if not getattr(settings, "PISTON_IGNORE_DUPE_MODELS", False):
+                    warnings.warn(
+                        "Handler already registered for model %s, "
+                        "you may experience inconsistent results."
+                        % new_cls.model.__name__
+                    )
 
             typemapper[new_cls] = (new_cls.model, new_cls.is_anonymous)
         else:
             typemapper[new_cls] = (None, new_cls.is_anonymous)
 
-        if name not in ('BaseHandler', 'AnonymousBaseHandler'):
+        if name not in ("BaseHandler", "AnonymousBaseHandler"):
             handler_tracker.append(new_cls)
 
         return new_cls
+
 
 class BaseHandler(object):
     """
@@ -45,18 +55,19 @@ class BaseHandler(object):
     receive a request as the first argument from the
     resource. Use this for checking `request.user`, etc.
     """
+
     __metaclass__ = HandlerMetaClass
 
-    allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
+    allowed_methods = ("GET", "POST", "PUT", "DELETE")
     anonymous = is_anonymous = False
-    exclude = ('password', )
-    fields =  ( )
+    exclude = ("password",)
+    fields = ()
 
     def flatten_dict(self, dct):
-        return dict([ (str(k), dct.get(k)) for k in dct.keys() ])
+        return dict([(str(k), dct.get(k)) for k in dct.keys()])
 
     def has_model(self):
-        return hasattr(self, 'model') or hasattr(self, 'queryset')
+        return hasattr(self, "model") or hasattr(self, "queryset")
 
     def queryset(self, request):
         return self.model.objects.all()
@@ -88,7 +99,7 @@ class BaseHandler(object):
                 return self.queryset(request).get(pk=kwargs.get(pkfield))
             except ObjectDoesNotExist:
                 return rc.NOT_FOUND
-            except MultipleObjectsReturned: # should never happen, since we're using a PK
+            except MultipleObjectsReturned:  # should never happen, since we're using a PK
                 return rc.BAD_REQUEST
         else:
             return self.queryset(request).filter(*args, **kwargs)
@@ -123,12 +134,12 @@ class BaseHandler(object):
             inst = self.queryset(request).get(pk=kwargs.get(pkfield))
         except ObjectDoesNotExist:
             return rc.NOT_FOUND
-        except MultipleObjectsReturned: # should never happen, since we're using a PK
+        except MultipleObjectsReturned:  # should never happen, since we're using a PK
             return rc.BAD_REQUEST
 
         attrs = self.flatten_dict(request.data)
-        for k,v in attrs.iteritems():
-            setattr( inst, k, v )
+        for k, v in attrs.iteritems():
+            setattr(inst, k, v)
 
         inst.save()
         return rc.ALL_OK
@@ -148,9 +159,11 @@ class BaseHandler(object):
         except self.model.DoesNotExist:
             return rc.NOT_HERE
 
+
 class AnonymousBaseHandler(BaseHandler):
     """
     Anonymous handler.
     """
+
     is_anonymous = True
-    allowed_methods = ('GET',)
+    allowed_methods = ("GET",)

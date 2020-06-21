@@ -1,14 +1,20 @@
-from django.db import models
-from django.contrib.auth.models import User
-from django.db import connections, router, transaction, IntegrityError
+from __future__ import absolute_import
 
+from django.contrib.auth.models import User
+from django.db import IntegrityError
+from django.db import connections
+from django.db import models
+from django.db import router
+from django.db import transaction
 
 KEY_SIZE = 18
 SECRET_SIZE = 32
 
+
 class KeyManager(models.Manager):
-    '''Add support for random key/secret generation
-    '''
+    """Add support for random key/secret generation
+    """
+
     def generate_random_codes(self):
         key = User.objects.make_random_password(length=KEY_SIZE)
         secret = User.objects.make_random_password(length=SECRET_SIZE)
@@ -40,6 +46,7 @@ class ConsumerManager(KeyManager):
 
     _default_consumer = None
 
+
 class ResourceManager(models.Manager):
     _default_resource = None
 
@@ -50,11 +57,12 @@ class ResourceManager(models.Manager):
         if not self._default_resource:
             self._default_resource = self.get(name=name)
 
-        return self._default_resource        
+        return self._default_resource
+
 
 class TokenManager(KeyManager):
     def first_or_create(self, **kwargs):
-        '''
+        """
         Method similar to get_or_create, but get_or_create isn't thread safe.
 
         As the TokenManager use of get_or_create doesn't use uniqueness feature
@@ -69,16 +77,15 @@ class TokenManager(KeyManager):
         Most of code here were get from get_or_create Django's implementations.
             basically change .get() to filter()[0]
             and the exception to IndexError
-        '''
-        assert kwargs, \
-                'first_or_create() must be passed at least one keyword argument'
-        defaults = kwargs.pop('defaults', {})
+        """
+        assert kwargs, "first_or_create() must be passed at least one keyword argument"
+        defaults = kwargs.pop("defaults", {})
         try:
             self._for_write = True
             return self.filter(**kwargs)[0], False
         except IndexError:
             try:
-                params = dict([(k, v) for k, v in kwargs.items() if '__' not in k])
+                params = dict([(k, v) for k, v in kwargs.items() if "__" not in k])
                 params.update(defaults)
                 obj = self.model(**params)
                 sid = transaction.savepoint(using=self.db)
@@ -90,21 +97,21 @@ class TokenManager(KeyManager):
                 try:
                     return self.filter(**kwargs)[0], False
                 except IndexError:
-                    raise self.model.DoesNotExist("%s matching query does not "
-                                         "exist." % self.model._meta.object_name)
+                    raise self.model.DoesNotExist(
+                        "%s matching query does not "
+                        "exist." % self.model._meta.object_name
+                    )
 
     def create_token(self, consumer, token_type, timestamp, user=None):
         """
         Shortcut to create a token with random key/secret.
         """
-        token, created = self.first_or_create(consumer=consumer, 
-                                            token_type=token_type, 
-                                            timestamp=timestamp,
-                                            user=user)
+        token, created = self.first_or_create(
+            consumer=consumer, token_type=token_type, timestamp=timestamp, user=user
+        )
 
         if created:
             token.key, token.secret = self.generate_random_codes()
             token.save()
 
         return token
-        

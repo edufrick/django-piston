@@ -1,5 +1,8 @@
-from django.middleware.http import ConditionalGetMiddleware
+from __future__ import absolute_import
+
 from django.middleware.common import CommonMiddleware
+from django.middleware.http import ConditionalGetMiddleware
+
 
 def compat_middleware_factory(klass):
     """
@@ -9,12 +12,15 @@ def compat_middleware_factory(klass):
     which will prematurely exhaust the data source if we're
     using generators or buffers.
     """
+
     class compatwrapper(klass):
         def process_response(self, req, resp):
-            if not hasattr(resp, 'streaming'):
+            if not hasattr(resp, "streaming"):
                 return klass.process_response(self, req, resp)
             return resp
+
     return compatwrapper
+
 
 ConditionalMiddlewareCompatProxy = compat_middleware_factory(ConditionalGetMiddleware)
 CommonMiddlewareCompatProxy = compat_middleware_factory(CommonMiddleware)
