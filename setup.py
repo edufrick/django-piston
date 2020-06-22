@@ -12,7 +12,7 @@ except ImportError:
 
 setup(
     name="django-piston",
-    version="0.3.1",
+    version="0.3.2",
     url="https://github.com/fsouza/django-piston",
     license="BSD",
     description="Piston is a Django mini-framework creating APIs.",
