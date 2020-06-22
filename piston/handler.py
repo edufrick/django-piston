@@ -3,11 +3,11 @@ from __future__ import absolute_import
 import warnings
 
 import six
+
 from django.conf import settings
 from django.core.exceptions import MultipleObjectsReturned
 from django.core.exceptions import ObjectDoesNotExist
-
-from utils import rc
+from piston.utils import rc
 
 typemapper = {}
 handler_tracker = []

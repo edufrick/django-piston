@@ -9,12 +9,12 @@ for the documentation and below for the licence.
 ## Uncomment the statement 'print >> sys.stderr, func_src'  in _decorator
 ## to understand what is going on.
 
-__all__ = ["decorator", "new_wrapper", "getinfo"]
-
 from __future__ import absolute_import
 
 import inspect
-import sys
+
+__all__ = ["decorator", "new_wrapper", "getinfo"]
+
 
 try:
     set
@@ -32,7 +32,7 @@ def getinfo(func):
     - doc (the docstring : str)
     - module (the module name : str)
     - dict (the function __dict__ : str)
-    
+
     >>> def f(self, x=1, y=2, *args, **kw): pass
 
     >>> info = getinfo(f)
@@ -41,7 +41,7 @@ def getinfo(func):
     'f'
     >>> info["argnames"]
     ['self', 'x', 'y', 'args', 'kw']
-    
+
     >>> info["defaults"]
     (1, 2)
 
@@ -62,12 +62,12 @@ def getinfo(func):
         name=func.__name__,
         argnames=argnames,
         signature=signature,
-        defaults=func.func_defaults,
+        defaults=func.__defaults__,
         doc=func.__doc__,
         module=func.__module__,
         dict=func.__dict__,
-        globals=func.func_globals,
-        closure=func.func_closure,
+        globals=func.__globals__,
+        closure=func.__closure__,
     )
 
 
@@ -89,7 +89,7 @@ def update_wrapper(wrapper, model, infodict=None):
 def new_wrapper(wrapper, model):
     """
     An improvement over functools.update_wrapper. The wrapper is a generic
-    callable object. It works by generating a copy of the wrapper with the 
+    callable object. It works by generating a copy of the wrapper with the
     right signature and by updating the copy, not the original.
     Moreovoer, 'model' can be a dictionary with keys 'name', 'doc', 'module',
     'dict', 'defaults'.
@@ -145,7 +145,7 @@ def decorator(caller):
      def caller(func, *args, **kw):
          # do something
          return func(*args, **kw)
-    
+
     Here is an example of usage:
 
     >>> @decorator
@@ -155,7 +155,7 @@ def decorator(caller):
 
     >>> chatty.__name__
     'chatty'
-    
+
     >>> @chatty
     ... def f(): pass
     ...

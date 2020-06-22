@@ -3,8 +3,9 @@ from __future__ import print_function
 
 import time
 
-import django
 import six
+
+import django
 from django import get_version as django_version
 from django.conf import settings
 from django.contrib.sites.models import Site
@@ -15,8 +16,7 @@ from django.http import HttpResponse
 from django.template import TemplateDoesNotExist
 from django.template import loader
 from django.utils.translation import ugettext as _
-
-from decorator import decorator
+from piston.decorator import decorator
 
 __version__ = "0.2.5.8"
 

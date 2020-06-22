@@ -3,10 +3,13 @@ from __future__ import generators
 
 import decimal
 import inspect
+import io
+import pickle
 import re
 
-import django
 import six
+
+import django
 from django.conf import settings
 from django.core import serializers
 from django.core.serializers.json import DateTimeAwareJSONEncoder
@@ -16,12 +19,11 @@ from django.db.models import permalink
 from django.db.models.query import QuerySet
 from django.db.models.query import RawQuerySet
 from django.http import HttpResponse
-from django.utils.encoding import smart_unicode
+from django.utils.encoding import smart_text
 from django.utils.xmlutils import SimplerXMLGenerator
-
-from utils import HttpStatusCode
-from utils import Mimer
-from validate_jsonp import is_valid_jsonp_callback_value
+from piston.utils import HttpStatusCode
+from piston.utils import Mimer
+from piston.validate_jsonp import is_valid_jsonp_callback_value
 
 try:
     # yaml isn't standard with python.  It shouldn't be required if it
@@ -52,16 +54,6 @@ else:
 
 
 NOT_FOUND = []  # just a marker to attributes not found
-
-try:
-    import cStringIO as StringIO
-except ImportError:
-    import StringIO
-
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
 
 
 def public_attrs(obj):
@@ -131,7 +123,7 @@ class Emitter(object):
         """
         Recursively serialize a lot of types, and
         in cases where it doesn't recognize the type,
-        it will fall back to Django's `smart_unicode`.
+        it will fall back to Django's `smart_text`.
 
         Returns `dict`.
         """
@@ -166,7 +158,7 @@ class Emitter(object):
             ):
                 ret = _any(thing.all(), fields)
             else:
-                ret = smart_unicode(thing, strings_only=True)
+                ret = smart_text(thing, strings_only=True)
 
             return ret
 
@@ -415,10 +407,10 @@ class XMLEmitter(Emitter):
                 self._to_xml(xml, value)
                 xml.endElement(key)
         else:
-            xml.characters(smart_unicode(data))
+            xml.characters(smart_text(data))
 
     def render(self, request):
-        stream = StringIO.StringIO()
+        stream = io.StringIO()
 
         xml = SimplerXMLGenerator(stream, "utf-8")
         xml.startDocument()
