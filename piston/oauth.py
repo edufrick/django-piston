@@ -29,8 +29,9 @@ import cgi
 import hmac
 import random
 import time
-import urllib
-import urlparse
+
+import six
+from six.moves.urllib import parse
 
 VERSION = "1.0"  # Hi Blaine!
 HTTP_METHOD = "GET"
@@ -51,15 +52,15 @@ def build_authenticate_header(realm=""):
 
 def escape(s):
     """Escape a URL including any /."""
-    return urllib.quote(s.decode("utf-8").encode("utf-8"), safe="~")
+    return parse.quote(s.decode("utf-8").encode("utf-8"), safe="~")
 
 
 def _utf8_str(s):
     """Convert unicode to utf-8."""
-    if isinstance(s, unicode):
+    if isinstance(s, six.text_type):
         return s.encode("utf-8")
     else:
-        return str(s)
+        return bytes(s)
 
 
 def generate_timestamp():
@@ -96,7 +97,7 @@ class OAuthConsumer(object):
 class OAuthToken(object):
     """OAuthToken is a data type that represents an End User via either an access
     or request token.
-    
+
     key -- the token
     secret -- the token secret
 
@@ -125,13 +126,13 @@ class OAuthToken(object):
     def get_callback_url(self):
         if self.callback and self.verifier:
             # Append the oauth_verifier.
-            parts = urlparse.urlparse(self.callback)
+            parts = parse.urlparse(self.callback)
             scheme, netloc, path, params, query, fragment = parts[:6]
             if query:
                 query = "%s&oauth_verifier=%s" % (query, self.verifier)
             else:
                 query = "oauth_verifier=%s" % self.verifier
-            return urlparse.urlunparse((scheme, netloc, path, params, query, fragment))
+            return parse.urlunparse((scheme, netloc, path, params, query, fragment))
         return self.callback
 
     def to_string(self):
@@ -141,8 +142,9 @@ class OAuthToken(object):
         }
         if self.callback_confirmed is not None:
             data["oauth_callback_confirmed"] = self.callback_confirmed
-        return urllib.urlencode(data)
+        return parse.urlencode(data)
 
+    @staticmethod
     def from_string(s):
         """ Returns a token from something like:
         oauth_token_secret=xxx&oauth_token=xxx
@@ -157,8 +159,6 @@ class OAuthToken(object):
             pass  # 1.0, no callback confirmed.
         return token
 
-    from_string = staticmethod(from_string)
-
     def __str__(self):
         return self.to_string()
 
@@ -167,11 +167,11 @@ class OAuthRequest(object):
     """OAuthRequest represents the request and can be serialized.
 
     OAuth parameters:
-        - oauth_consumer_key 
+        - oauth_consumer_key
         - oauth_token
         - oauth_signature_method
-        - oauth_signature 
-        - oauth_timestamp 
+        - oauth_signature
+        - oauth_timestamp
         - oauth_nonce
         - oauth_version
         - oauth_verifier
@@ -198,7 +198,7 @@ class OAuthRequest(object):
     def get_parameter(self, parameter):
         try:
             return self.parameters[parameter]
-        except:
+        except Exception:
             raise OAuthError("Parameter not found: %s" % parameter)
 
     def _get_timestamp_nonce(self):
@@ -207,7 +207,7 @@ class OAuthRequest(object):
     def get_nonoauth_parameters(self):
         """Get any non-OAuth parameters."""
         parameters = {}
-        for k, v in self.parameters.iteritems():
+        for k, v in six.iteritems(self.parameters):
             # Ignore oauth parameters.
             if k.find("oauth_") < 0:
                 parameters[k] = v
@@ -218,7 +218,7 @@ class OAuthRequest(object):
         auth_header = 'OAuth realm="%s"' % realm
         # Add the oauth parameters.
         if self.parameters:
-            for k, v in self.parameters.iteritems():
+            for k, v in six.iteritems(self.parameters):
                 if k[:6] == "oauth_":
                     auth_header += ', %s="%s"' % (k, escape(str(v)))
         return {"Authorization": auth_header}
@@ -228,7 +228,7 @@ class OAuthRequest(object):
         return "&".join(
             [
                 "%s=%s" % (escape(str(k)), escape(str(v)))
-                for k, v in self.parameters.iteritems()
+                for k, v in six.iteritems(self.parameters)
             ]
         )
 
@@ -242,7 +242,7 @@ class OAuthRequest(object):
         try:
             # Exclude the signature if it exists.
             del params["oauth_signature"]
-        except:
+        except Exception:
             pass
         # Escape key values before sorting.
         key_values = [
@@ -259,7 +259,7 @@ class OAuthRequest(object):
 
     def get_normalized_http_url(self):
         """Parses the URL and rebuilds it to be scheme://host/path."""
-        parts = urlparse.urlparse(self.http_url)
+        parts = parse.urlparse(self.http_url)
         scheme, netloc, path = parts[:3]
         # Exclude default port numbers.
         if scheme == "http" and netloc[-3:] == ":80":
@@ -281,6 +281,7 @@ class OAuthRequest(object):
         """Calls the build signature method within the signature method."""
         return signature_method.build_signature(self, consumer, token)
 
+    @staticmethod
     def from_request(
         http_method,
         http_url,
@@ -303,7 +304,7 @@ class OAuthRequest(object):
                     # Get the parameters from the header.
                     header_params = OAuthRequest._split_header(auth_header)
                     parameters.update(header_params)
-                except:
+                except Exception:
                     raise OAuthError(
                         "Unable to parse OAuth parameters from " "Authorization header."
                     )
@@ -314,7 +315,7 @@ class OAuthRequest(object):
             parameters.update(query_params)
 
         # URL parameters.
-        param_str = urlparse.urlparse(http_url)[4]  # query
+        param_str = parse.urlparse(http_url)[4]  # query
         url_params = OAuthRequest._split_url_string(param_str)
         parameters.update(url_params)
 
@@ -323,8 +324,7 @@ class OAuthRequest(object):
 
         return None
 
-    from_request = staticmethod(from_request)
-
+    @staticmethod
     def from_consumer_and_token(
         oauth_consumer,
         token=None,
@@ -358,8 +358,7 @@ class OAuthRequest(object):
 
         return OAuthRequest(http_method, http_url, parameters)
 
-    from_consumer_and_token = staticmethod(from_consumer_and_token)
-
+    @staticmethod
     def from_token_and_callback(
         token, callback=None, http_method=HTTP_METHOD, http_url=None, parameters=None
     ):
@@ -373,8 +372,7 @@ class OAuthRequest(object):
 
         return OAuthRequest(http_method, http_url, parameters)
 
-    from_token_and_callback = staticmethod(from_token_and_callback)
-
+    @staticmethod
     def _split_header(header):
         """Turn Authorization: header into parameters."""
         params = {}
@@ -388,19 +386,16 @@ class OAuthRequest(object):
             # Split key-value.
             param_parts = param.split("=", 1)
             # Remove quotes and unescape the value.
-            params[param_parts[0]] = urllib.unquote(param_parts[1].strip('"'))
+            params[param_parts[0]] = parse.unquote(param_parts[1].strip('"'))
         return params
 
-    _split_header = staticmethod(_split_header)
-
+    @staticmethod
     def _split_url_string(param_str):
         """Turn URL string into parameters."""
         parameters = cgi.parse_qs(param_str, keep_blank_values=False)
-        for k, v in parameters.iteritems():
-            parameters[k] = urllib.unquote(v[0])
+        for k, v in six.iteritems(parameters):
+            parameters[k] = parse.unquote(v[0])
         return parameters
-
-    _split_url_string = staticmethod(_split_url_string)
 
 
 class OAuthServer(object):
@@ -434,7 +429,6 @@ class OAuthServer(object):
             token = self._get_token(oauth_request, "request")
         except OAuthError:
             # No token required for the initial token request.
-            version = self._get_version(oauth_request)
             consumer = self._get_consumer(oauth_request)
             try:
                 callback = self.get_callback(oauth_request)

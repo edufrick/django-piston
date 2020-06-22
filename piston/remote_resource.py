@@ -14,12 +14,10 @@ api.get('/product')
 
 from __future__ import absolute_import
 
-import httplib
-import urllib
-import urllib2
-
 import oauth2  # third party lib
 from django.utils import simplejson
+from six.moves.urllib import error
+from six.moves.urllib import parse
 
 
 class BaseRemoteResource(object):
@@ -48,7 +46,7 @@ class BaseRemoteResource(object):
     def prepare_data(self, data):
         """ data as a dict"""
         if data is not None:
-            data = urllib.urlencode(data)
+            data = parse.urlencode(data)
         else:
             data = ""
         return data
@@ -65,7 +63,7 @@ class BaseRemoteResource(object):
         url += path
 
         if data is not None:
-            data = urllib.urlencode(data)
+            data = parse.urlencode(data)
             if "?" in url:
                 url += "&"
             else:
@@ -88,13 +86,8 @@ class BaseRemoteResource(object):
         response, content = client.request(uri, method=method, *args, **kwargs)
         if not response["status"].startswith("2"):
             status = int(response["status"])
-            msg = "Request %s '%s' failed as (%s - %s)" % (
-                method,
-                uri,
-                status,
-                httplib.responses[status],
-            )
-            raise urllib2.HTTPError(uri, int(response["status"]), msg, response, None)
+            msg = "Request %s '%s' failed as (%s)" % (method, uri, status,)
+            raise error.HTTPError(uri, int(response["status"]), msg, response, None)
         return response, content
 
     def submit(self, method="POST", path="", data=None):
@@ -139,7 +132,7 @@ class RemoteJSONResource(BaseRemoteResource):
             # If we put the body as a plain JSON and declare the content-type header as 'application/json'
             # the OAuth signature will fail
             data = simplejson.dumps(data)
-            data = urllib.urlencode({"data": data})
+            data = parse.urlencode({"data": data})
         else:
             data = ""
         return data

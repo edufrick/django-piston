@@ -1,9 +1,11 @@
 from __future__ import absolute_import
+from __future__ import print_function
 
 import binascii
 import logging
 
 import oauth2  # third party lib
+import six
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.decorators import login_required
@@ -66,7 +68,7 @@ class HttpBasicAuthentication(object):
             if not authmeth.lower() == "basic":
                 return False
 
-            auth = auth.strip().decode("base64")
+            auth = auth.strip().decode("utf-8")
             (username, password) = auth.split(":", 1)
         except (ValueError, binascii.Error):
             return False
@@ -75,7 +77,7 @@ class HttpBasicAuthentication(object):
             self.auth_func(username=username, password=password) or AnonymousUser()
         )
 
-        return not request.user in (False, None, AnonymousUser())
+        return request.user not in (False, None, AnonymousUser())
 
     def challenge(self):
         resp = HttpResponse("Authorization Required")
@@ -110,18 +112,16 @@ def load_data_store():
 
     try:
         mod = __import__(module, {}, {}, attr)
-    except ImportError, e:
-        raise ImproperlyConfigured, 'Error importing OAuth data store %s: "%s"' % (
-            module,
-            e,
+    except ImportError as e:
+        raise ImproperlyConfigured(
+            'Error importing OAuth data store %s: "%s"' % (module, e,)
         )
 
     try:
         cls = getattr(mod, attr)
     except AttributeError:
-        raise ImproperlyConfigured, 'Module %s does not define a "%s" OAuth data store' % (
-            module,
-            attr,
+        raise ImproperlyConfigured(
+            'Module %s does not define a "%s" OAuth data store' % (module, attr,)
         )
 
     return cls
@@ -173,7 +173,7 @@ def send_oauth_error(err=None):
     realm = "OAuth"
     header = oauth.build_authenticate_header(realm=realm)
 
-    for k, v in header.iteritems():
+    for k, v in six.iteritems(header):
         response[k] = v
 
     return response
@@ -191,7 +191,7 @@ def oauth_request_token(request):
             response = HttpResponse(token.to_string())
         else:
             return INVALID_PARAMS_RESPONSE
-    except oauth.OAuthError, err:
+    except oauth.OAuthError as err:
         response = send_oauth_error(err)
 
     return response
@@ -219,12 +219,12 @@ def oauth_user_auth(request):
 
     try:
         token = oauth_server.fetch_request_token(oauth_request)
-    except oauth.OAuthError, err:
+    except oauth.OAuthError as err:
         return send_oauth_error(err)
 
     try:
         callback = oauth_server.get_callback(oauth_request)
-    except:
+    except Exception:
         callback = None
 
     if request.method == "GET":
@@ -243,7 +243,7 @@ def oauth_user_auth(request):
                 args = "?" + token.to_string(only_key=True)
             else:
                 args = "?error=%s" % "Access not granted by user."
-                print "FORM ERROR", form.errors
+                print("FORM ERROR" + form.errors)
 
             if not callback:
                 callback = getattr(settings, "OAUTH_CALLBACK_VIEW")
@@ -251,7 +251,7 @@ def oauth_user_auth(request):
 
             response = HttpResponseRedirect(callback + args)
 
-        except oauth.OAuthError, err:
+        except oauth.OAuthError as err:
             response = send_oauth_error(err)
     else:
         response = HttpResponse("Action not allowed.")
@@ -271,7 +271,7 @@ def oauth_access_token(request):
             return HttpResponse(token.to_string())
         else:
             return INVALID_PARAMS_RESPONSE
-    except oauth.OAuthError, err:
+    except oauth.OAuthError as err:
         return send_oauth_error(err)
 
 
@@ -300,8 +300,8 @@ class OAuthAuthentication(object):
         if self.is_valid_request(request):
             try:
                 consumer, token, parameters = self.validate_token(request)
-            except oauth.OAuthError, err:
-                print send_oauth_error(err)
+            except oauth.OAuthError as err:
+                print(send_oauth_error(err))
                 return False
 
             if consumer and token:
@@ -327,7 +327,7 @@ class OAuthAuthentication(object):
         response.status_code = 401
         realm = "API"
 
-        for k, v in self.builder(realm=realm).iteritems():
+        for k, v in six.iteritems(self.builder(realm=realm)):
             response[k] = v
 
         tmpl = loader.render_to_string(
@@ -440,7 +440,7 @@ class OAuth2LeggedAuthentication(object):
 
         try:
             self.oauth_server.verify_request(req, consumer, None)
-        except oauth2.Error, e:
+        except oauth2.Error as e:
             msg = (
                 "OAuth2Legged failed verify signed request for consumer(key=%s, secret=%s) error: %s"
                 % (consumer.key, consumer.secret, e)

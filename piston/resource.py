@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import sys
 
 import django
+import six
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.db.models.query import QuerySet
@@ -83,7 +84,7 @@ class Resource(object):
         `Resource` subclass.
         """
         resp = rc.BAD_REQUEST
-        resp.write(u" " + unicode(e.form.errors))
+        resp.write(u" " + six.text_type(e.form.errors))
         return resp
 
     @property
@@ -159,7 +160,7 @@ class Resource(object):
                 else:
                     request.data = request.PUT
 
-        if not rm in handler.allowed_methods:
+        if rm not in handler.allowed_methods:
             return HttpResponseNotAllowed(handler.allowed_methods)
 
         meth = getattr(handler, self.callmap.get(rm, ""), None)
@@ -178,7 +179,7 @@ class Resource(object):
 
         try:
             result = meth(request, *args, **kwargs)
-        except Exception, e:
+        except Exception as e:
             result = self.error_handler(e, request, meth, em_format)
 
         try:
@@ -230,7 +231,7 @@ class Resource(object):
             resp.streaming = self.stream
 
             return resp
-        except HttpStatusCode, e:
+        except HttpStatusCode as e:
             return e.response
 
     @staticmethod

@@ -71,8 +71,8 @@ class TokenManager(KeyManager):
 
         It will return first occurance, if not found, create with a new instance.
 
-        This workaround can still create 2 instances, but further calls won't 
-        raise MultipleObjectsReturned 
+        This workaround can still create 2 instances, but further calls won't
+        raise MultipleObjectsReturned
 
         Most of code here were get from get_or_create Django's implementations.
             basically change .get() to filter()[0]
@@ -92,7 +92,7 @@ class TokenManager(KeyManager):
                 obj.save(force_insert=True, using=self.db)
                 transaction.savepoint_commit(sid, using=self.db)
                 return obj, True
-            except IntegrityError, e:
+            except IntegrityError:
                 transaction.savepoint_rollback(sid, using=self.db)
                 try:
                     return self.filter(**kwargs)[0], False

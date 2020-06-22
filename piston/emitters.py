@@ -1,17 +1,16 @@
 from __future__ import absolute_import
 from __future__ import generators
 
-import copy
 import decimal
 import inspect
 import re
 
 import django
+import six
 from django.conf import settings
 from django.core import serializers
 from django.core.serializers.json import DateTimeAwareJSONEncoder
 from django.core.urlresolvers import NoReverseMatch
-from django.core.urlresolvers import reverse
 from django.db.models import Model
 from django.db.models import permalink
 from django.db.models.query import QuerySet
@@ -31,7 +30,6 @@ try:
 except ImportError:
     yaml = None
 
-# Fallback since `any` isn't in Python <2.5
 try:
     any
 except NameError:
@@ -41,8 +39,6 @@ except NameError:
             if element:
                 return True
         return False
-
-
 
 
 if django.VERSION >= (1, 5):
@@ -232,7 +228,7 @@ class Emitter(object):
 
                     # sets can be negated.
                     for exclude in exclude_fields:
-                        if isinstance(exclude, basestring):
+                        if isinstance(exclude, six.string_types):
                             get_fields.discard(exclude)
 
                         elif isinstance(exclude, re._pattern_type):
@@ -301,7 +297,7 @@ class Emitter(object):
                 for f in data._meta.fields:
                     ret[f.attname] = _any(getattr(data, f.attname))
 
-                fields = public_attrs(data.__class__) + ret.keys()
+                fields = public_attrs(data.__class__) + list(six.iterkeys(ret))
                 add_ons = [k for k in public_attrs(data) if k not in fields]
 
                 for k in add_ons:
@@ -315,20 +311,20 @@ class Emitter(object):
 
                     try:
                         ret["resource_uri"] = reverser(lambda: (url_id, fields))()
-                    except NoReverseMatch, e:
+                    except NoReverseMatch:
                         pass
 
             if hasattr(data, "get_api_url") and "resource_uri" not in ret:
                 try:
                     ret["resource_uri"] = data.get_api_url()
-                except:
+                except Exception:
                     pass
 
             # absolute uri
             if hasattr(data, "get_absolute_url") and get_absolute_uri:
                 try:
                     ret["absolute_uri"] = data.get_absolute_url()
-                except:
+                except Exception:
                     pass
 
             return ret
@@ -349,13 +345,13 @@ class Emitter(object):
             """
             Dictionaries.
             """
-            return dict([(k, _any(v, fields)) for k, v in data.iteritems()])
+            return dict([(k, _any(v, fields)) for k, v in six.iteritems(data)])
 
         # Kickstart the seralizin'.
         return _any(self.data, self.fields)
 
     def in_typemapper(self, model, anonymous):
-        for klass, (km, is_anon) in self.typemapper.iteritems():
+        for klass, (km, is_anon) in six.iteritems(self.typemapper):
             if model is km and is_anon is anonymous:
                 return klass
 
@@ -380,8 +376,8 @@ class Emitter(object):
         """
         Gets an emitter, returns the class and a content-type.
         """
-        if cls.EMITTERS.has_key(format):
-            return cls.EMITTERS.get(format)
+        if format in cls.EMITTERS:
+            return cls.EMITTERS[format]
 
         raise ValueError("No emitters found for type %s" % format)
 
@@ -414,7 +410,7 @@ class XMLEmitter(Emitter):
                 self._to_xml(xml, item)
                 xml.endElement("resource")
         elif isinstance(data, dict):
-            for key, value in data.iteritems():
+            for key, value in six.iteritems(data):
                 xml.startElement(key, {})
                 self._to_xml(xml, value)
                 xml.endElement(key)

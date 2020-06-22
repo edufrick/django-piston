@@ -26,7 +26,6 @@ import os
 import shutil
 import sys
 import tempfile
-import urllib2
 
 import zc.buildout.buildout
 
@@ -38,7 +37,6 @@ try:
     import pkg_resources
 except ImportError:
     ez = {}
-    exec urllib2.urlopen("http://peak.telecommunity.com/dist/ez_setup.py").read() in ez
     ez["use_setuptools"](to_dir=tmpeggs, download_delay=0)
 
     import pkg_resources

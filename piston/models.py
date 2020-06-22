@@ -1,22 +1,18 @@
 from __future__ import absolute_import
 
 import time
-import urllib
-import urlparse
 
 from django.contrib.auth.models import User
-from django.core.mail import mail_admins
-from django.core.mail import send_mail
 from django.db import models
 # Django imports
 from django.db.models.signals import post_delete
 from django.db.models.signals import post_save
+from six.moves.urllib import parse
 
-# Piston imports
-from managers import ConsumerManager
-from managers import ResourceManager
 from managers import TokenManager
-from signals import consumer_post_delete
+# Piston imports
+from piston.managers import ConsumerManager
+from piston.signals import consumer_post_delete
 from signals import consumer_post_save
 
 KEY_SIZE = 18
@@ -62,10 +58,10 @@ class Consumer(models.Model):
     def generate_random_codes(self):
         """
         Used to generate random key/secret pairings. Use this after you've
-        added the other data in place of save(). 
+        added the other data in place of save().
 
         c = Consumer()
-        c.name = "My consumer" 
+        c.name = "My consumer"
         c.description = "An app that makes ponies from the API."
         c.user = some_user_object
         c.generate_random_codes()
@@ -90,7 +86,7 @@ class Token(models.Model):
     secret = models.CharField(max_length=SECRET_SIZE)
     verifier = models.CharField(max_length=VERIFIER_SIZE)
     token_type = models.IntegerField(choices=TOKEN_TYPES)
-    timestamp = models.IntegerField(default=long(time.time()))
+    timestamp = models.IntegerField(default=int(time.time()))
     is_approved = models.BooleanField(default=False)
 
     user = models.ForeignKey(User, null=True, blank=True, related_name="tokens")
@@ -121,7 +117,7 @@ class Token(models.Model):
         if only_key:
             del token_dict["oauth_token_secret"]
 
-        return urllib.urlencode(token_dict)
+        return parse.urlencode(token_dict)
 
     def generate_random_codes(self):
         key = User.objects.make_random_password(length=KEY_SIZE)
@@ -139,13 +135,13 @@ class Token(models.Model):
     def get_callback_url(self):
         if self.callback and self.verifier:
             # Append the oauth_verifier.
-            parts = urlparse.urlparse(self.callback)
+            parts = parse.urlparse(self.callback)
             scheme, netloc, path, params, query, fragment = parts[:6]
             if query:
                 query = "%s&oauth_verifier=%s" % (query, self.verifier)
             else:
                 query = "oauth_verifier=%s" % self.verifier
-            return urlparse.urlunparse((scheme, netloc, path, params, query, fragment))
+            return parse.urlunparse((scheme, netloc, path, params, query, fragment))
         return self.callback
 
     def set_callback(self, callback):

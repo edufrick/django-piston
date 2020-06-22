@@ -9,9 +9,7 @@ from __future__ import absolute_import
 import re
 from unicodedata import category
 
-# ------------------------------------------------------------------------------
-# javascript identifier unicode categories and "exceptional" chars
-# ------------------------------------------------------------------------------
+import six
 
 valid_jsid_categories_start = frozenset(["Lu", "Ll", "Lt", "Lm", "Lo", "Nl"])
 
@@ -111,9 +109,9 @@ def is_valid_javascript_identifier(identifier, escape=r"\u", ucd_cat=category):
     if not identifier:
         return False
 
-    if not isinstance(identifier, unicode):
+    if not isinstance(identifier, six.text_type):
         try:
-            identifier = unicode(identifier, "utf-8")
+            identifier = six.text_type(identifier, "utf-8")
         except UnicodeDecodeError:
             return False
 
@@ -165,100 +163,6 @@ def is_valid_jsonp_callback_value(value):
             return False
 
     return True
-
-
-# ------------------------------------------------------------------------------
-# test
-# ------------------------------------------------------------------------------
-
-
-def test():
-    """
-    The function ``is_valid_javascript_identifier`` validates a given identifier
-    according to the latest draft of the ECMAScript 5 Specification:
-
-      >>> is_valid_javascript_identifier('hello')
-      True
-
-      >>> is_valid_javascript_identifier('alert()')
-      False
-
-      >>> is_valid_javascript_identifier('a-b')
-      False
-
-      >>> is_valid_javascript_identifier('23foo')
-      False
-
-      >>> is_valid_javascript_identifier('foo23')
-      True
-
-      >>> is_valid_javascript_identifier('$210')
-      True
-
-      >>> is_valid_javascript_identifier(u'Stra\u00dfe')
-      True
-
-      >>> is_valid_javascript_identifier(r'\u0062') # u'b'
-      True
-
-      >>> is_valid_javascript_identifier(r'\u62')
-      False
-
-      >>> is_valid_javascript_identifier(r'\u0020')
-      False
-
-      >>> is_valid_javascript_identifier('_bar')
-      True
-
-      >>> is_valid_javascript_identifier('some_var')
-      True
-
-      >>> is_valid_javascript_identifier('$')
-      True
-
-    But ``is_valid_jsonp_callback_value`` is the function you want to use for
-    validating JSON-P callback parameter values:
-
-      >>> is_valid_jsonp_callback_value('somevar')
-      True
-
-      >>> is_valid_jsonp_callback_value('function')
-      False
-
-      >>> is_valid_jsonp_callback_value(' somevar')
-      False
-
-    It supports the possibility of '.' being present in the callback name, e.g.
-
-      >>> is_valid_jsonp_callback_value('$.ajaxHandler')
-      True
-
-      >>> is_valid_jsonp_callback_value('$.23')
-      False
-
-    As well as the pattern of providing an array index lookup, e.g.
-
-      >>> is_valid_jsonp_callback_value('array_of_functions[42]')
-      True
-
-      >>> is_valid_jsonp_callback_value('array_of_functions[42][1]')
-      True
-
-      >>> is_valid_jsonp_callback_value('$.ajaxHandler[42][1].foo')
-      True
-
-      >>> is_valid_jsonp_callback_value('array_of_functions[42]foo[1]')
-      False
-
-      >>> is_valid_jsonp_callback_value('array_of_functions[]')
-      False
-
-      >>> is_valid_jsonp_callback_value('array_of_functions["key"]')
-      False
-
-    Enjoy!
-
-    """
 
 
 if __name__ == "__main__":

@@ -147,7 +147,7 @@ class HandlerDocumentation(object):
     def get_resource_uri_template(self):
         """
         URI template processor.
-        
+
         See http://bitworking.org/projects/URI-Templates/
         """
 
@@ -179,7 +179,7 @@ class HandlerDocumentation(object):
                         if set(kwargs.keys()) != set(params):
                             continue
                         return _convert(result, params)
-        except:
+        except Exception:
             return None
 
     resource_uri_template = property(get_resource_uri_template)
@@ -195,16 +195,14 @@ def documentation_view(request):
     """
     docs = []
 
-    for handler in handler_tracker:
-        docs.append(generate_doc(handler))
+    for h in handler_tracker:
+        docs.append(generate_doc(h))
 
-    def _compare(doc1, doc2):
+    def _key(doc):
         # handlers and their anonymous counterparts are put next to each other.
-        name1 = doc1.name.replace("Anonymous", "")
-        name2 = doc2.name.replace("Anonymous", "")
-        return cmp(name1, name2)
+        return doc.name.replace("Anonymous", "")
 
-    docs.sort(_compare)
+    docs.sort(key=_key)
 
     return render_to_response(
         "documentation.html", {"docs": docs}, RequestContext(request)

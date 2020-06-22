@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import warnings
 
+import six
 from django.conf import settings
 from django.core.exceptions import MultipleObjectsReturned
 from django.core.exceptions import ObjectDoesNotExist
@@ -22,7 +23,7 @@ class HandlerMetaClass(type):
         new_cls = type.__new__(cls, name, bases, attrs)
 
         def already_registered(model, anon):
-            for k, (m, a) in typemapper.iteritems():
+            for k, (m, a) in six.iteritems(typemapper):
                 if model == m and anon == a:
                     return k
 
@@ -45,7 +46,7 @@ class HandlerMetaClass(type):
         return new_cls
 
 
-class BaseHandler(object):
+class BaseHandler(six.with_metaclass(HandlerMetaClass, object)):
     """
     Basehandler that gives you CRUD for free.
     You are supposed to subclass this for specific
@@ -55,8 +56,6 @@ class BaseHandler(object):
     receive a request as the first argument from the
     resource. Use this for checking `request.user`, etc.
     """
-
-    __metaclass__ = HandlerMetaClass
 
     allowed_methods = ("GET", "POST", "PUT", "DELETE")
     anonymous = is_anonymous = False
@@ -138,7 +137,7 @@ class BaseHandler(object):
             return rc.BAD_REQUEST
 
         attrs = self.flatten_dict(request.data)
-        for k, v in attrs.iteritems():
+        for k, v in six.iteritems(attrs):
             setattr(inst, k, v)
 
         inst.save()

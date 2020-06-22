@@ -1,8 +1,8 @@
 from __future__ import absolute_import
+from __future__ import print_function
 
 import base64
 import tempfile
-import urllib
 
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -18,7 +18,6 @@ from test_project.apps.testapp import signals
 from test_project.apps.testapp.models import CircularA
 from test_project.apps.testapp.models import CircularB
 from test_project.apps.testapp.models import CircularC
-from test_project.apps.testapp.models import Comment
 from test_project.apps.testapp.models import ExpressiveTestModel
 from test_project.apps.testapp.models import InheritedModel
 from test_project.apps.testapp.models import Issue58Model
@@ -28,10 +27,8 @@ from test_project.apps.testapp.models import TestModel
 try:
     import yaml
 except ImportError:
-    print "Can't run YAML testsuite"
+    print("Can't run YAML testsuite")
     yaml = None
-
-
 
 
 class MainTests(TestCase):
@@ -215,13 +212,13 @@ class AbstractBaseClassTests(MainTests):
 
         expected = """[
     {
-        "id": 1, 
-        "some_other": "something else", 
+        "id": 1,
+        "some_other": "something else",
         "some_field": "something here"
-    }, 
+    },
     {
-        "id": 2, 
-        "some_other": "something else", 
+        "id": 2,
+        "some_other": "something else",
         "some_field": "something here"
     }
 ]"""
@@ -231,8 +228,8 @@ class AbstractBaseClassTests(MainTests):
     def test_specific_id(self):
         ids = (1, 2)
         be = """{
-    "id": %d, 
-    "some_other": "something else", 
+    "id": %d,
+    "some_other": "something else",
     "some_field": "something here"
 }"""
 
@@ -264,13 +261,13 @@ class IncomingExpressiveTests(MainTests):
 
         expected = """[
     {
-        "content": "bar", 
-        "comments": [], 
+        "content": "bar",
+        "comments": [],
         "title": "foo"
-    }, 
+    },
     {
-        "content": "bar2", 
-        "comments": [], 
+        "content": "bar2",
+        "comments": [],
         "title": "foo2"
     }
 ]"""
@@ -292,25 +289,25 @@ class IncomingExpressiveTests(MainTests):
 
         expected = """[
     {
-        "content": "bar", 
-        "comments": [], 
+        "content": "bar",
+        "comments": [],
         "title": "foo"
-    }, 
+    },
     {
-        "content": "bar2", 
-        "comments": [], 
+        "content": "bar2",
+        "comments": [],
         "title": "foo2"
-    }, 
+    },
     {
-        "content": "test", 
+        "content": "test",
         "comments": [
             {
                 "content": "test1"
-            }, 
+            },
             {
                 "content": "test2"
             }
-        ], 
+        ],
         "title": "test"
     }
 ]"""
@@ -495,9 +492,9 @@ class ListFieldsTest(MainTests):
 
     def test_single_item(self):
         expect = """{
-    "color": "green", 
-    "kind": "fruit", 
-    "id": 1, 
+    "color": "green",
+    "kind": "fruit",
+    "id": 1,
     "variety": "apple"
 }"""
         resp = self.client.get("/api/list_fields/1")
@@ -507,15 +504,15 @@ class ListFieldsTest(MainTests):
     def test_multiple_items(self):
         expect = """[
     {
-        "id": 1, 
+        "id": 1,
         "variety": "apple"
-    }, 
+    },
     {
-        "id": 2, 
+        "id": 2,
         "variety": "carrot"
-    }, 
+    },
     {
-        "id": 3, 
+        "id": 3,
         "variety": "dog"
     }
 ]"""
@@ -557,11 +554,11 @@ class Issue58ModelTests(MainTests):
 
         expected = """[
     {
-        "read": true, 
+        "read": true,
         "model": "t"
-    }, 
+    },
     {
-        "read": false, 
+        "read": false,
         "model": "f"
     }
 ]"""
